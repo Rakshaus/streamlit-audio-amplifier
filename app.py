@@ -1,43 +1,50 @@
 import streamlit as st
 from pydub import AudioSegment
-import os
 import tempfile
+import os
+import pygame
 
-# Title and Description
-st.title("🔊 Audio Amplifier Web App")
-st.markdown("Upload an audio file, choose a volume gain (in decibels), and download the amplified version.")
+# Function to amplify audio
+def amplify_audio(input_audio, gain_db=10):
+    # Convert to AudioSegment and apply amplification
+    audio = AudioSegment.from_file(input_audio)
+    amplified = audio + gain_db
 
-# File uploader
-uploaded_file = st.file_uploader("📁 Upload an audio file", type=["wav", "mp3", "ogg"])
+    # Save to a temp file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as out_file:
+        amplified.export(out_file.name, format="wav")
+        return out_file.name
 
-# Amplification level (dB)
-gain_db = st.slider("🎚️ Amplification Level (dB)", min_value=1, max_value=100, value=10)
+# Streamlit UI
+st.title("🎚️ Audio Amplifier Web App")
+st.markdown("Upload an audio file, choose amplification level (in dB), and download the louder version.")
 
-if uploaded_file is not None:
-    st.success(f"Uploaded: {uploaded_file.name}")
+# Upload
+uploaded_file = st.file_uploader("📁 Upload Audio File", type=["mp3", "wav", "ogg"])
 
-    # Convert uploaded file into a Pydub AudioSegment
-    audio = AudioSegment.from_file(uploaded_file)
+# Amplification slider
+gain = st.slider("Select Gain (dB)", min_value=0, max_value=50, value=10)
 
-    # Apply gain
-    amplified_audio = audio + gain_db
+# Show audio player
+if uploaded_file:
+    st.audio(uploaded_file, format="audio/wav")
+    if st.button("🔊 Amplify Audio"):
+        # Save uploaded file to a temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_input:
+            temp_input.write(uploaded_file.read())
+            temp_input_path = temp_input.name
 
-    # Save to temporary file
-    temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-    amplified_audio.export(temp_output.name, format="wav")
+        # Amplify the audio
+        output_path = amplify_audio(temp_input_path, gain_db=gain)
+        st.success("Audio amplified successfully!")
 
-    # Audio preview
-    st.audio(temp_output.name, format="audio/wav")
+        # Play amplified audio
+        st.audio(output_path, format="audio/wav")
 
-    # Download button
-    with open(temp_output.name, "rb") as f:
-        st.download_button(
-            label="⬇️ Download Amplified Audio",
-            data=f.read(),
-            file_name=f"{os.path.splitext(uploaded_file.name)[0]}_amplified.wav",
-            mime="audio/wav"
-        )
+        # Download button
+        with open(output_path, "rb") as f:
+            st.download_button("⬇️ Download Amplified Audio", data=f, file_name="amplified_audio.wav", mime="audio/wav")
 
-    st.success("✅ Audio amplified successfully!")
-else:
-    st.info("👆 Please upload an audio file to begin.")
+        # Cleanup
+        os.remove(temp_input_path)
+        os.remove(output_path)
